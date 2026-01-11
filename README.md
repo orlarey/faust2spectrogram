@@ -1,202 +1,145 @@
-# Faust Spectrogram Architecture - COMPLETE IMPLEMENTATION ✅
+# faust2spectrogram
 
-## Files
+Generate spectrograms from Faust DSP programs in one command.
 
-- `spectrogram.cpp`: Complete Faust architecture for generating spectrograms
-- `test.dsp`: Test Faust DSP (simple oscillator)
-- `faust-spectrogram-spec.md`: Complete project specification
-- `compile_and_test.sh`: Compilation and test script
-
-## Implementation Status
-
-### ✅ COMPLETE
-
-1. **Architecture Structure**
-   - Self-contained architecture (defines `UI`, `Meta`, `dsp` locally)
-   - Compatible with standard Faust workflow
-
-2. **DSP Parameter Capture**
-   - `SpectrogramUI` class for gate/freq/gain
-   - Complete validation with error messages
-   - Automatic clamping with warnings
-
-3. **CLI Parser**
-   - All positional arguments
-   - All options (FFT, Mel, Image, Amplitude)
-   - Layout presets (full, minimal, scientific, raw)
-
-4. **Audio Synthesis**
-   - Audio generation with temporal gate control
-   - Sample by sample for precise control
-
-5. **STFT (Short-Time Fourier Transform)**
-   - Windowing: Hann, Hamming, Blackman
-   - FFT with FFTW3 (float precision)
-   - Configurable hop size
-
-6. **Mel Conversion**
-   - Hz ↔ Mel conversion
-   - Mel triangular filter bank
-   - Application on FFT spectrum
-
-7. **PNG Generation**
-   - PNG export with libpng
-   - Colormaps: viridis, magma, hot, gray
-   - Scaling (global, horizontal, vertical)
-   - Optional dB conversion
-   - Automatic normalization
-
-### ⚠️ Annotations (structure present but minimal rendering)
-
-The following functions are partially implemented:
-- Time and frequency axes
-- Gate line
-- Colorbar
-- Title and legend
-- PNG metadata
-
-The generated PNG contains the raw spectrogram. Annotations can be added later.
-
-## Dependencies
-
-### Prerequisites
+## Quick Start
 
 ```bash
-# Installation on macOS with Homebrew
-brew install fftw libpng
+# Create a simple DSP
+cat > osc.dsp << EOF
+import("stdfaust.lib");
+gate = button("gate");
+freq = nentry("freq", 440, 20, 20000, 1);
+gain = hslider("gain", 0.5, 0, 1, 0.01);
+process = os.osc(freq) * gate * gain;
+EOF
 
-# Installation on Ubuntu/Debian
-sudo apt-get install libfftw3-dev libpng-dev
-
-# Installation on Fedora/RHEL
-sudo dnf install fftw-devel libpng-devel
+# Generate spectrogram
+faust2spectrogram osc.dsp 2 0.5 440 0.9
 ```
 
-## Compilation and Usage
+This creates a PNG showing a 2-second spectrogram with gate=1 for 0.5s, frequency 440Hz, gain 0.9.
 
-### Automatic Compilation
+## Installation
+
+### 1. Install Dependencies
+
+```bash
+# macOS with Homebrew
+brew install faust fftw libpng
+
+# macOS with MacPorts
+sudo port install faust fftw-3 fftw-3-single libpng
+
+# Ubuntu/Debian
+sudo apt-get install faust libfftw3-dev libpng-dev
+
+# Fedora/RHEL
+sudo dnf install faust fftw-devel libpng-devel
+```
+
+### 2. Install faust2spectrogram
 
 ```bash
 # Make the script executable
-chmod +x compile_and_test.sh
+chmod +x faust2spectrogram
 
-# Compile and test
-./compile_and_test.sh
+# Option A: Install globally
+sudo cp faust2spectrogram /usr/local/bin/
+
+# Option B: Add to your PATH
+export PATH=$PATH:$(pwd)
 ```
 
-### Manual Compilation
+The architecture file `spectrogram.cpp` will be automatically found in the current directory or in Faust's architecture paths.
+
+## Usage
 
 ```bash
-# 1. Compile the DSP with Faust
-faust -a spectrogram.cpp test.dsp -o test.cpp
-
-# 2. Compile the C++ with libraries
-g++ test.cpp -o test -std=c++11 -O3 -lfftw3f -lpng -lm
-
-# Or with clang++
-clang++ test.cpp -o test -std=c++11 -O3 -lfftw3f -lpng -lm
+faust2spectrogram [OPTIONS] file.dsp duration gate_duration frequency gain [SPECTROGRAM_OPTIONS]
 ```
 
-**Note**: Use `-lfftw3f` (float) and not `-lfftw3` (double) for better performance.
+### Required Arguments
 
-### Usage
+| Argument | Description |
+|----------|-------------|
+| `file.dsp` | Faust DSP file (must expose `gate`, `freq`, `gain`) |
+| `duration` | Total duration in seconds |
+| `gate_duration` | Duration during which gate=1 (from 0 to gate_duration) |
+| `frequency` | Frequency in Hz |
+| `gain` | Gain value |
 
-```bash
-# Basic
-./test 2 0.5 440 0.9
+### Script Options
 
-# With options
-./test 2 0.5 440 0.9 -sr 48000 -fft 4096 -mel 256
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | Display help |
+| `-v, --verbose` | Verbose mode (show compilation details) |
+| `-k, --keep` | Keep intermediate files (.cpp, executable) |
+| `-o, --output <file>` | Output PNG filename |
 
-# High resolution
-./test 5 1.0 880 0.8 -scale 2.0 -layout scientific
-
-# dB scale
-./test 2 0.5 440 0.9 -db -dbmin -100
-
-# Custom colormap
-./test 2 0.5 440 0.9 -cmap magma -layout minimal
-```
-
-## Output
-
-The program generates:
-- A PNG file with the mel spectrogram
-- Automatic name: `test-YYYYMMDD-HHMMSS.png`
-- Or custom name with `-o <file>`
-
-### Console Output Example
-
-```
-DSP Parameters:
-  gate: button
-  freq: nentry [20, 20000]
-  gain: hslider [0, 1]
-
-Synthesizing audio...
-  Generated 88200 samples
-
-Generating spectrogram...
-  Audio samples: 88200
-  FFT size: 2048
-  Hop size: 512
-  Mel bands: 128
-  Computing STFT...
-  Creating mel filterbank...
-  Applying mel filterbank...
-  Normalizing...
-  Writing PNG: test-20260111-184530.png
-✓ Spectrogram saved to: test-20260111-184530.png
-```
-
-## Available Options
-
-See `faust-spectrogram-spec.md` for the complete list of options.
-
-### Main Options
+### Spectrogram Options
 
 | Option | Description | Default |
-|--------|-------------|--------|
-| `-sr <rate>` | Sample rate | 44100 |
-| `-fft <size>` | FFT size | 2048 |
-| `-hop <size>` | Hop size | 512 |
-| `-mel <bands>` | Mel bands | 128 |
-| `-window <type>` | hann\|hamming\|blackman | hann |
-| `-cmap <type>` | viridis\|magma\|hot\|gray | viridis |
-| `-layout <type>` | full\|minimal\|scientific\|raw | full |
-| `-scale <f>` | Global scale | 1.0 |
-| `-db` | Use dB scale | false |
-| `-o <file>` | Output file | auto |
+|--------|-------------|---------|
+| `-sr <rate>` | Sample rate in Hz | 44100 |
+| `-fft <size>` | FFT size (power of 2) | 2048 |
+| `-hop <size>` | Hop size in samples | 512 |
+| `-mel <bands>` | Number of mel bands | 128 |
+| `-window <type>` | Window type: hann, hamming, blackman | hann |
+| `-cmap <type>` | Colormap: viridis, magma, hot, gray | viridis |
+| `-layout <type>` | Layout preset: full, minimal, scientific, raw | full |
+| `-scale <factor>` | Global scale factor | 1.0 |
+| `-hscale <factor>` | Horizontal scale (time axis) | 1.0 |
+| `-vscale <factor>` | Vertical scale (frequency axis) | 1.0 |
+| `-db` | Display in decibels | off |
+| `-dbmin <val>` | Minimum dB value | -80 |
 
-## Usage Examples
+## Examples
 
-### 1. Simple Oscillator Analysis
+### Basic Usage
+
 ```bash
-./test 2 0.5 440 0.9
+faust2spectrogram synth.dsp 2 0.5 440 0.9
 ```
-Generates 2s of audio with gate=1 for 0.5s, frequency 440Hz, gain 0.9
 
-### 2. High Resolution Analysis
+### High Resolution Analysis
+
 ```bash
-./test 5 1.0 880 0.8 -fft 4096 -hop 256 -mel 256 -scale 2.0
+faust2spectrogram synth.dsp 5 1.0 880 0.8 -fft 4096 -mel 256 -scale 2.0
 ```
-5 seconds, FFT 4096, 256 mel bands, image 2× larger
 
-### 3. dB Scale for Weak Signals
+### dB Scale for Weak Signals
+
 ```bash
-./test 2 0.5 440 0.9 -db -dbmin -120
+faust2spectrogram filter.dsp 2 0.5 1000 0.9 -db -dbmin -120
 ```
-Display in dB with -120dB threshold
 
-### 4. Alternative Colormap
+### Scientific Layout
+
 ```bash
-./test 2 0.5 440 0.9 -cmap magma -layout scientific
+faust2spectrogram osc.dsp 2 0.5 440 0.9 -layout scientific -cmap magma -o analysis.png
 ```
-Magma colormap, scientific layout
 
-## Different DSP Tests
+### Batch Processing
 
-### FM Oscillator
+```bash
+# Analyze different frequencies
+for freq in 220 440 880 1760; do
+    faust2spectrogram synth.dsp 2 0.5 $freq 0.9 -o "synth_${freq}hz.png"
+done
+```
+
+## DSP Requirements
+
+Your Faust DSP **must** expose exactly 3 parameters with these labels:
+
+- `gate`: button or checkbox
+- `freq`: nentry, hslider, or vslider
+- `gain`: nentry, hslider, or vslider
+
+### Valid DSP Example
+
 ```faust
 import("stdfaust.lib");
 
@@ -204,13 +147,24 @@ gate = button("gate");
 freq = nentry("freq", 440, 20, 20000, 1);
 gain = hslider("gain", 0.5, 0, 1, 0.01);
 
-// FM synthesis
-carrier = os.osc(freq);
-modulator = os.osc(freq * 2) * 100;
+process = os.osc(freq) * gate * gain;
+```
+
+### FM Synthesis Example
+
+```faust
+import("stdfaust.lib");
+
+gate = button("gate");
+freq = nentry("freq", 440, 20, 20000, 1);
+gain = hslider("gain", 0.5, 0, 1, 0.01);
+
+modulator = os.osc(freq * 2) * 200;
 process = os.osc(freq + modulator) * gate * gain;
 ```
 
-### Resonant Filter
+### Filtered Noise Example
+
 ```faust
 import("stdfaust.lib");
 
@@ -218,51 +172,87 @@ gate = button("gate");
 freq = nentry("freq", 1000, 20, 20000, 1);
 gain = hslider("gain", 0.5, 0, 1, 0.01);
 
-noise = no.noise;
-filtered = fi.resonlp(freq, 10, 1);
-process = noise : filtered * gate * gain;
+process = no.noise : fi.resonlp(freq, 5, 1) * gate * gain;
 ```
 
-## MCP Integration (next step)
+## Layout Presets
 
-The architecture is ready to be integrated into a dockerized MCP server allowing Claude to:
-1. Generate Faust code
-2. Compile with this architecture
-3. Visualize the result via spectrogram
-4. Iterate on the design
+### `full` (default)
+Complete visualization with title, axes, colorbar, gate line, and metadata.
 
-## Future Improvements
+### `minimal`
+Essential elements: spectrogram, axes, gate line. No title, colorbar, or metadata.
 
-1. **Complete Annotations**
-   - Axes with precise graduations
-   - Stylized gate line
-   - Colorbar with scale
-   - Title and metadata
+### `scientific`
+Publication-ready: spectrogram, clear axes, colorbar with units, subtle gate line, technical metadata.
 
-2. **PNG Metadata**
-   - tEXt chunks with parameters
-   - Complete traceability
+### `raw`
+Pure spectrogram pixels with no annotations.
 
-3. **Additional Formats**
-   - SVG export
-   - Raw data export (CSV/JSON)
+## Troubleshooting
 
-4. **Performance**
-   - FFT parallelization
-   - SIMD optimizations
+### Error: Architecture file not found
 
-5. **Advanced Features**
-   - Comparative spectrograms
-   - GIF animation
-   - Multi-channel support
+The script looks for `spectrogram.cpp` in the current directory and Faust's architecture paths. Either:
+- Keep `spectrogram.cpp` in your working directory
+- Copy it to `~/.faust/architecture/`
+- Copy it to `/usr/local/share/faust/architecture/`
+
+### Error: fftw3.h not found
+
+```bash
+# macOS
+brew install fftw
+
+# Linux
+sudo apt-get install libfftw3-dev
+```
+
+### Error: Parameter "gate" not found
+
+Your DSP must expose the three required parameters (`gate`, `freq`, `gain`). Check your DSP code.
+
+### Use Verbose Mode for Diagnosis
+
+```bash
+faust2spectrogram -v synth.dsp 2 0.5 440 0.9
+```
+
+## How It Works
+
+1. **Compile**: Faust compiles your DSP with the `spectrogram.cpp` architecture
+2. **Link**: G++ links with FFTW3 and libpng libraries
+3. **Synthesize**: The program generates audio based on your parameters
+4. **Analyze**: Computes Short-Time Fourier Transform (STFT) and mel-scale conversion
+5. **Visualize**: Exports a PNG with the spectrogram and optional annotations
+6. **Cleanup**: Removes temporary files (unless `-k` flag is used)
+
+## Advantages
+
+| Manual Compilation | faust2spectrogram |
+|--------------------|-------------------|
+| `faust -a spectrogram.cpp foo.dsp -o foo.cpp` | ✓ Automatic |
+| `g++ foo.cpp -o foo -I... -L... -lfftw3f -lpng` | ✓ Automatic |
+| `./foo 2 0.5 440 0.9` | ✓ Automatic |
+| Clean temporary files | ✓ Automatic |
+| **4+ commands** | **1 command** |
+
+## Output
+
+The program generates a PNG file containing:
+- Mel-scale spectrogram
+- Time axis (seconds)
+- Frequency axis (Hz, mel-scaled)
+- Gate transition line (optional)
+- Colorbar with amplitude scale (optional)
+- Metadata footer (optional)
+
+Default filename: `<dsp-name>-YYYYMMDD-HHMMSS.png`
 
 ## License
 
 GPL v3 (as specified in the architecture header)
 
-## Support
+## Credits
 
-For any questions or issues:
-- Verify that FFTW3 and libpng are properly installed
-- Verify that the DSP properly exposes `gate`, `freq`, `gain`
-- Consult the complete specification in `faust-spectrogram-spec.md`
+Part of the Faust ecosystem. Built with FFTW3 and libpng.
