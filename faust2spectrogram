@@ -1,0 +1,235 @@
+#!/bin/bash
+
+#####################################################################
+# faust2spectrogram
+# Generate mel-spectrogram PNG from Faust DSP code
+#
+# Usage: faust2spectrogram [OPTIONS] file.dsp duration gate_duration frequency gain [SPECTROGRAM_OPTIONS]
+#
+# Arguments:
+#   file.dsp          Faust DSP file (must expose: gate, freq, gain)
+#   duration          Total duration in seconds
+#   gate_duration     Gate=1 duration in seconds
+#   frequency         Frequency in Hz
+#   gain              Gain value
+#
+# Options:
+#   -h, --help        Show this help
+#   -v, --verbose     Verbose output
+#   -k, --keep        Keep intermediate files (cpp, executable)
+#   -o, --output      Output PNG filename (default: auto-generated)
+#
+# Spectrogram options: (passed to the generated executable)
+#   -sr, -fft, -hop, -mel, -window, -cmap, -scale, -layout, -db, etc.
+#   See spectrogram.cpp documentation for full list
+#
+# Example:
+#   faust2spectrogram synth.dsp 2 0.5 440 0.9 -mel 256 -cmap magma
+#
+#####################################################################
+
+# Exit on error
+set -e
+
+# Default options
+VERBOSE=0
+KEEP_FILES=0
+OUTPUT_FILE=""
+FAUST_OPTIONS=""
+
+# Detect architecture
+ARCH=$(uname -m)
+SYSTEM=$(uname -s)
+
+# Determine paths based on system
+if [ "$SYSTEM" = "Darwin" ]; then
+    # macOS - try MacPorts first, then Homebrew
+    if [ -d "/opt/local" ]; then
+        # MacPorts
+        INCLUDE_PATH="/opt/local/include"
+        LIB_PATH="/opt/local/lib"
+        if command -v clang++-mp-18 &> /dev/null; then
+            CXX="clang++-mp-18"
+        elif command -v clang++ &> /dev/null; then
+            CXX="clang++"
+        else
+            CXX="g++"
+        fi
+    elif [ -d "/opt/homebrew" ]; then
+        # Homebrew Apple Silicon
+        INCLUDE_PATH="/opt/homebrew/include"
+        LIB_PATH="/opt/homebrew/lib"
+        CXX="clang++"
+    elif [ -d "/usr/local" ]; then
+        # Homebrew Intel
+        INCLUDE_PATH="/usr/local/include"
+        LIB_PATH="/usr/local/lib"
+        CXX="clang++"
+    fi
+else
+    # Linux
+    INCLUDE_PATH="/usr/include"
+    LIB_PATH="/usr/lib"
+    CXX="g++"
+fi
+
+# Find spectrogram.cpp architecture file
+ARCH_FILE=""
+# Check in common locations
+for path in \
+    "./spectrogram.cpp" \
+    "$(dirname "$0")/spectrogram.cpp" \
+    "$HOME/.faust/architecture/spectrogram.cpp" \
+    "/usr/local/share/faust/architecture/spectrogram.cpp" \
+    "/opt/local/share/faust/architecture/spectrogram.cpp"
+do
+    if [ -f "$path" ]; then
+        ARCH_FILE="$path"
+        break
+    fi
+done
+
+# Print usage
+usage() {
+    grep "^#" "$0" | grep -v "#!/bin/bash" | sed 's/^#//'
+    exit 1
+}
+
+# Print error and exit
+error() {
+    echo "Error: $1" >&2
+    exit 1
+}
+
+# Verbose print
+vprint() {
+    if [ $VERBOSE -eq 1 ]; then
+        echo "$1"
+    fi
+}
+
+# Parse command line options
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            usage
+            ;;
+        -v|--verbose)
+            VERBOSE=1
+            shift
+            ;;
+        -k|--keep)
+            KEEP_FILES=1
+            shift
+            ;;
+        -o|--output)
+            OUTPUT_FILE="$2"
+            shift 2
+            ;;
+        -*)
+            # Unknown option at this stage, might be a Faust option
+            break
+            ;;
+        *)
+            # First non-option argument should be the DSP file
+            break
+            ;;
+    esac
+done
+
+# Check minimum arguments
+if [ $# -lt 5 ]; then
+    echo "Error: Missing required arguments"
+    echo ""
+    usage
+fi
+
+# Get DSP file and positional arguments
+DSP_FILE="$1"
+DURATION="$2"
+GATE_DURATION="$3"
+FREQUENCY="$4"
+GAIN="$5"
+shift 5
+
+# Remaining arguments are spectrogram options
+SPEC_OPTIONS="$@"
+
+# Add output file option if specified
+if [ -n "$OUTPUT_FILE" ]; then
+    SPEC_OPTIONS="-o $OUTPUT_FILE $SPEC_OPTIONS"
+fi
+
+# Validate DSP file
+if [ ! -f "$DSP_FILE" ]; then
+    error "DSP file not found: $DSP_FILE"
+fi
+
+# Check if architecture file exists
+if [ -z "$ARCH_FILE" ]; then
+    error "Architecture file 'spectrogram.cpp' not found. Place it in the current directory or install it properly."
+fi
+
+vprint "Using architecture: $ARCH_FILE"
+
+# Extract basename
+BASENAME=$(basename "$DSP_FILE" .dsp)
+
+# Temporary files
+CPP_FILE="${BASENAME}.cpp"
+EXEC_FILE="${BASENAME}"
+
+vprint "DSP file: $DSP_FILE"
+vprint "Output executable: $EXEC_FILE"
+
+# Compile DSP to C++
+echo "Compiling $DSP_FILE with spectrogram architecture..."
+if [ $VERBOSE -eq 1 ]; then
+    faust -a "$ARCH_FILE" "$DSP_FILE" -o "$CPP_FILE" $FAUST_OPTIONS
+else
+    faust -a "$ARCH_FILE" "$DSP_FILE" -o "$CPP_FILE" $FAUST_OPTIONS > /dev/null 2>&1
+fi
+
+if [ ! -f "$CPP_FILE" ]; then
+    error "Failed to generate C++ file"
+fi
+
+vprint "✓ Generated $CPP_FILE"
+
+# Compile C++ to executable
+echo "Compiling $CPP_FILE to executable..."
+COMPILE_CMD="$CXX $CPP_FILE -o $EXEC_FILE -std=c++11 -O3 -I$INCLUDE_PATH -L$LIB_PATH -lfftw3f -lpng -lm"
+
+vprint "Compile command: $COMPILE_CMD"
+
+if [ $VERBOSE -eq 1 ]; then
+    $COMPILE_CMD
+else
+    $COMPILE_CMD > /dev/null 2>&1
+fi
+
+if [ ! -f "$EXEC_FILE" ]; then
+    error "Failed to generate executable"
+fi
+
+vprint "✓ Generated $EXEC_FILE"
+
+# Execute with arguments
+echo "Generating spectrogram..."
+EXEC_CMD="./$EXEC_FILE $DURATION $GATE_DURATION $FREQUENCY $GAIN $SPEC_OPTIONS"
+
+vprint "Executing: $EXEC_CMD"
+echo ""
+
+$EXEC_CMD
+
+# Cleanup intermediate files unless -k specified
+if [ $KEEP_FILES -eq 0 ]; then
+    vprint ""
+    vprint "Cleaning up intermediate files..."
+    rm -f "$CPP_FILE" "$EXEC_FILE"
+    vprint "✓ Cleanup complete"
+fi
+
+echo ""
+echo "Done!"
