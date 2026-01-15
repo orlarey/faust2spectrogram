@@ -40,18 +40,12 @@ sudo dnf install faust fftw-devel libpng-devel
 
 ### 2. Install faust2spectrogram
 
+Once you have faust isntalled, you can run:
+
 ```bash
-# Make the script executable
-chmod +x faust2spectrogram
-
-# Option A: Install globally
-sudo cp faust2spectrogram /usr/local/bin/
-
-# Option B: Add to your PATH
-export PATH=$PATH:$(pwd)
+sudo make install
 ```
 
-The architecture file `spectrogram.cpp` will be automatically found in the current directory or in Faust's architecture paths.
 
 ## Usage
 
@@ -190,13 +184,6 @@ Publication-ready: spectrogram, clear axes, colorbar with units, subtle gate lin
 Pure spectrogram pixels with no annotations.
 
 ## Troubleshooting
-
-### Error: Architecture file not found
-
-The script looks for `spectrogram.cpp` in the current directory and Faust's architecture paths. Either:
-- Keep `spectrogram.cpp` in your working directory
-- Copy it to `~/.faust/architecture/`
-- Copy it to `/usr/local/share/faust/architecture/`
 
 ### Error: fftw3.h not found
 

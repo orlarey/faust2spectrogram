@@ -73,22 +73,6 @@ else
     CXX="g++"
 fi
 
-# Find spectrogram.cpp architecture file
-ARCH_FILE=""
-# Check in common locations
-for path in \
-    "./spectrogram.cpp" \
-    "$(dirname "$0")/spectrogram.cpp" \
-    "$HOME/.faust/architecture/spectrogram.cpp" \
-    "/usr/local/share/faust/architecture/spectrogram.cpp" \
-    "/opt/local/share/faust/architecture/spectrogram.cpp"
-do
-    if [ -f "$path" ]; then
-        ARCH_FILE="$path"
-        break
-    fi
-done
-
 # Print usage
 usage() {
     grep "^#" "$0" | grep -v "#!/bin/bash" | sed 's/^#//'
@@ -165,13 +149,6 @@ if [ ! -f "$DSP_FILE" ]; then
     error "DSP file not found: $DSP_FILE"
 fi
 
-# Check if architecture file exists
-if [ -z "$ARCH_FILE" ]; then
-    error "Architecture file 'spectrogram.cpp' not found. Place it in the current directory or install it properly."
-fi
-
-vprint "Using architecture: $ARCH_FILE"
-
 # Extract basename
 BASENAME=$(basename "$DSP_FILE" .dsp)
 
@@ -185,9 +162,9 @@ vprint "Output executable: $EXEC_FILE"
 # Compile DSP to C++
 echo "Compiling $DSP_FILE with spectrogram architecture..."
 if [ $VERBOSE -eq 1 ]; then
-    faust -a "$ARCH_FILE" "$DSP_FILE" -o "$CPP_FILE" $FAUST_OPTIONS
+    faust -a spectrogram.cpp "$DSP_FILE" -o "$CPP_FILE" $FAUST_OPTIONS
 else
-    faust -a "$ARCH_FILE" "$DSP_FILE" -o "$CPP_FILE" $FAUST_OPTIONS > /dev/null 2>&1
+    faust -a spectrogram.cpp "$DSP_FILE" -o "$CPP_FILE" $FAUST_OPTIONS > /dev/null 2>&1
 fi
 
 if [ ! -f "$CPP_FILE" ]; then
